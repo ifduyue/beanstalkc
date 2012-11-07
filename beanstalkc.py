@@ -33,6 +33,7 @@ class BeanstalkcException(Exception): pass
 class UnexpectedResponse(BeanstalkcException): pass
 class CommandFailed(BeanstalkcException): pass
 class DeadlineSoon(BeanstalkcException): pass
+class NotAuthenticated(BeanstalkcException): pass
 
 class SocketError(BeanstalkcException):
     @staticmethod
@@ -83,9 +84,11 @@ class Connection(object):
         SocketError.wrap(self._socket.sendall, command)
         status, results = self._read_response()
         if status in expected_ok:
-            return results
+            return results 
         elif status in expected_err:
             raise CommandFailed(command.split()[0], status, results)
+        elif status == 'NOT_AUTHENTICATED':
+            raise NotAuthenticated()
         else:
             raise UnexpectedResponse(command.split()[0], status, results)
 
@@ -123,6 +126,17 @@ class Connection(object):
             return None
 
     # -- public interface --
+    
+    def auth(self, passwd):
+        try:
+            self._interact(
+                'auth %s\r\n' % passwd,
+                'AUTHENTICATED',
+                ['NOT_AUTHENTICATED'])
+            return True
+        except CommandFailed, (_, status, results):
+            if status == 'NOT_AUTHENTICATED':
+                return False
 
     def put(self, body, priority=DEFAULT_PRIORITY, delay=0, ttr=DEFAULT_TTR):
         """Put a job into the current tube. Returns job id."""
